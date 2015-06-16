@@ -18,13 +18,16 @@ package demo;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
+import java.lang.reflect.Field;
+
+import javax.annotation.PostConstruct;
+
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.actuate.endpoint.Endpoint;
+import org.springframework.boot.actuate.endpoint.mvc.EndpointMvcAdapter;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.context.annotation.Configuration;
@@ -32,6 +35,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -44,7 +48,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 @Configuration
 @Controller
-@EnableAspectJAutoProxy(proxyTargetClass=true)
+@EnableAspectJAutoProxy(proxyTargetClass = true)
 public class EndpointHypermediaConfiguration {
 
 	@Autowired
@@ -72,46 +76,54 @@ public class EndpointHypermediaConfiguration {
 	public static class WebEndpointPostProcessorConfiguration {
 		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public * org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))")
 		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
-			return new EndpointResource(joinPoint.proceed(), (MvcEndpoint) joinPoint.getTarget());
+			return new EndpointResource(joinPoint.proceed(),
+					(MvcEndpoint) joinPoint.getTarget());
 		}
 	}
 
 	@Component
-	public static class GenericEndpointPostProcessor implements BeanPostProcessor {
+	public static class GenericEndpointPostProcessor {
 
 		@Autowired
 		MvcEndpoints endpoints;
 
-		@Override
-		public Object postProcessBeforeInitialization(Object bean, String beanName)
-				throws BeansException {
-			return bean;
-		}
-
-		@Override
-		public Object postProcessAfterInitialization(Object bean, String beanName)
-				throws BeansException {
-			if (this.endpoints.getEndpoints().contains(bean)) {
-				return new GenericEndpointAdapter((MvcEndpoint)bean);
+		@PostConstruct
+		public void init() {
+			for (MvcEndpoint bean : this.endpoints.getEndpoints()) {
+				if (bean instanceof EndpointMvcAdapter) {
+					EndpointMvcAdapter adapter = (EndpointMvcAdapter) bean;
+					GenericEndpointAdapter endpoint = new GenericEndpointAdapter(
+							adapter.getDelegate(), adapter);
+					Field field = ReflectionUtils.findField(EndpointMvcAdapter.class,
+							"delegate");
+					ReflectionUtils.makeAccessible(field);
+					ReflectionUtils.setField(field, adapter, endpoint);
+				}
 			}
-			return bean;
 		}
 
 	}
 
 }
 
-class GenericEndpointAdapter implements MvcEndpoint {
+class GenericEndpointAdapter implements Endpoint<EndpointResource> {
 
-	private MvcEndpoint delegate;
+	private Endpoint<?> delegate;
+	private EndpointMvcAdapter generic;
 
-	public GenericEndpointAdapter(MvcEndpoint delegate) {
-		this.delegate = delegate;
+	public GenericEndpointAdapter(Endpoint<?> endpoint, EndpointMvcAdapter generic) {
+		this.delegate = endpoint;
+		this.generic = generic;
 	}
 
 	@Override
-	public String getPath() {
-		return this.delegate.getPath();
+	public String getId() {
+		return this.delegate.getId();
+	}
+
+	@Override
+	public boolean isEnabled() {
+		return this.delegate.isEnabled();
 	}
 
 	@Override
@@ -120,8 +132,8 @@ class GenericEndpointAdapter implements MvcEndpoint {
 	}
 
 	@Override
-	public Class<? extends Endpoint> getEndpointType() {
-		return this.delegate.getEndpointType();
+	public EndpointResource invoke() {
+		return new EndpointResource(this.delegate.invoke(), this.generic);
 	}
 
 }
@@ -133,7 +145,8 @@ class EndpointResource extends ResourceSupport {
 	@JsonCreator
 	public EndpointResource(Object embedded, MvcEndpoint endpoint) {
 		this.embedded = embedded;
-		add(linkTo(endpoint.getEndpointType()).slash(endpoint.getPath().substring(1)).withSelfRel());
+		add(linkTo(endpoint.getEndpointType()).slash(endpoint.getPath().substring(1))
+				.withSelfRel());
 	}
 
 	@JsonProperty("_embedded")
