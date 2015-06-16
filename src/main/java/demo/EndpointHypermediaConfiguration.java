@@ -21,15 +21,19 @@ import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -39,7 +43,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  */
 @Configuration
-@RestController
+@Controller
 @EnableAspectJAutoProxy(proxyTargetClass=true)
 public class EndpointHypermediaConfiguration {
 
@@ -47,6 +51,7 @@ public class EndpointHypermediaConfiguration {
 	MvcEndpoints endpoints;
 
 	@RequestMapping("/")
+	@ResponseBody
 	public ResourceSupport links() {
 		ResourceSupport map = new ResourceSupport();
 		map.add(linkTo(EndpointHypermediaConfiguration.class).withSelfRel());
@@ -57,6 +62,11 @@ public class EndpointHypermediaConfiguration {
 		return map;
 	}
 
+	@RequestMapping("/browse")
+	public String browse() {
+		return "redirect:/webjars/hal-browser/b7669f1-1/browser.html";
+	}
+
 	@Aspect
 	@Component
 	public static class WebEndpointPostProcessorConfiguration {
@@ -64,6 +74,54 @@ public class EndpointHypermediaConfiguration {
 		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
 			return new EndpointResource(joinPoint.proceed(), (MvcEndpoint) joinPoint.getTarget());
 		}
+	}
+
+	@Component
+	public static class GenericEndpointPostProcessor implements BeanPostProcessor {
+
+		@Autowired
+		MvcEndpoints endpoints;
+
+		@Override
+		public Object postProcessBeforeInitialization(Object bean, String beanName)
+				throws BeansException {
+			return bean;
+		}
+
+		@Override
+		public Object postProcessAfterInitialization(Object bean, String beanName)
+				throws BeansException {
+			if (this.endpoints.getEndpoints().contains(bean)) {
+				return new GenericEndpointAdapter((MvcEndpoint)bean);
+			}
+			return bean;
+		}
+
+	}
+
+}
+
+class GenericEndpointAdapter implements MvcEndpoint {
+
+	private MvcEndpoint delegate;
+
+	public GenericEndpointAdapter(MvcEndpoint delegate) {
+		this.delegate = delegate;
+	}
+
+	@Override
+	public String getPath() {
+		return this.delegate.getPath();
+	}
+
+	@Override
+	public boolean isSensitive() {
+		return this.delegate.isSensitive();
+	}
+
+	@Override
+	public Class<? extends Endpoint> getEndpointType() {
+		return this.delegate.getEndpointType();
 	}
 
 }
