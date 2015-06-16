@@ -16,6 +16,8 @@ import org.springframework.boot.test.WebIntegrationTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultHandler;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -49,21 +51,25 @@ public class EndpointDocumentation {
     public void endpoints() throws Exception {
         File file = new File(restdocsOutputDir + "/endpoints.adoc");
         file.getParentFile().mkdirs();
-        PrintWriter writer = new PrintWriter(file, "UTF-8");
+        final PrintWriter writer = new PrintWriter(file, "UTF-8");
 
         try {
-            for (MvcEndpoint endpoint: mvcEndpoints.getEndpoints()) {
+            for (MvcEndpoint endpoint : mvcEndpoints.getEndpoints()) {
                 final String endpointPath = endpoint.getPath();
 
                 this.mockMvc.perform(get(endpointPath)
                         .accept(MediaType.APPLICATION_JSON))
                         .andExpect(status().isOk())
-                        .andDo(document(endpointPath));
-
-                writer.println("== " + endpointPath);
-                writer.println("include::{generated}/" + endpointPath + "/curl-request.adoc[]");
-                writer.println("include::{generated}/" + endpointPath + "/http-request.adoc[]");
-                writer.println("include::{generated}/" + endpointPath + "/http-response.adoc[]");
+                        .andDo(document(endpointPath))
+                        .andDo(new ResultHandler() {
+                            @Override
+                            public void handle(MvcResult mvcResult) throws Exception {
+                                writer.println("== " + endpointPath);
+                                writer.println("include::{generated}/" + endpointPath + "/curl-request.adoc[]");
+                                writer.println("include::{generated}/" + endpointPath + "/http-request.adoc[]");
+                                writer.println("include::{generated}/" + endpointPath + "/http-response.adoc[]");
+                            }
+                        });
             }
         } finally {
             writer.close();
