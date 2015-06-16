@@ -18,15 +18,12 @@ package demo;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.endpoint.mvc.HealthMvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.hateoas.ResourceSupport;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,14 +39,13 @@ public class EndpointHypermediaConfiguration {
 	MvcEndpoints endpoints;
 
 	@RequestMapping("/")
-	public Map<String, Object> links() {
-		Map<String, Object> map = new LinkedHashMap<String, Object>();
-		map.put("self", linkTo(EndpointHypermediaConfiguration.class).withSelfRel());
+	public ResourceSupport links() {
+		ResourceSupport map = new ResourceSupport();
+		map.add(linkTo(EndpointHypermediaConfiguration.class).withSelfRel());
 		for (MvcEndpoint endpoint : this.endpoints.getEndpoints()) {
-			map.put(endpoint.getPath().substring(1),
-					linkTo(HealthMvcEndpoint.class).slash(endpoint.getPath()).withSelfRel());
+			map.add(linkTo(HealthMvcEndpoint.class).slash(endpoint.getPath()).withRel(endpoint.getPath().substring(1)));
 		}
-		return Collections.<String, Object> singletonMap("_links", map);
+		return map;
 	}
 
 }
