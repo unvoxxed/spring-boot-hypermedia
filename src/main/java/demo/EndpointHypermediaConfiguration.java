@@ -19,6 +19,8 @@ package demo;
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
 import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.Collections;
 
 import javax.annotation.PostConstruct;
 
@@ -26,23 +28,24 @@ import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties;
 import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.EndpointMvcAdapter;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.ReflectionUtils;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseBody;
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import endpoints.HalBrowserEndpoint;
+import endpoints.LinksMvcEndpoint;
 
 /**
  * @author Dave Syer
@@ -56,41 +59,22 @@ public class EndpointHypermediaConfiguration {
 	@Autowired
 	MvcEndpoints endpoints;
 
-	@RequestMapping("/")
-	@ResponseBody
-	public ResourceSupport links() {
-		ResourceSupport map = new ResourceSupport();
-		map.add(linkTo(EndpointHypermediaConfiguration.class).withSelfRel());
-		for (MvcEndpoint endpoint : this.endpoints.getEndpoints()) {
-			map.add(linkTo(endpoint.getEndpointType()).slash(endpoint.getPath()).withRel(
-					endpoint.getPath().substring(1)));
-		}
-		return map;
+	@Bean
+	public LinksMvcEndpoint linksMvcEndpoint() {
+		return new LinksMvcEndpoint(this.endpoints);
 	}
 
-	@RequestMapping("/hal")
-	public String redirect() {
-		return "redirect:/hal/";
-	}
-
-	@RequestMapping("/hal/")
-	public String browse() {
-		return "forward:/hal/browser.html";
-	}
-
-	@Component
-	public static class HalConfigurer extends WebMvcConfigurerAdapter {
-		@Override
-		public void addResourceHandlers(ResourceHandlerRegistry registry) {
-			registry.addResourceHandler("/hal/**").addResourceLocations("classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1/");
-		}
+	@Bean
+	public HalBrowserEndpoint halBrowserMvcEndpoint(ManagementServerProperties management) {
+		return new HalBrowserEndpoint(management);
 	}
 
 	@Aspect
 	@Component
 	public static class WebEndpointPostProcessorConfiguration {
 		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public "
-				+ "* org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))")
+				+ "* org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))"
+				+ " && !execution(* endpoints.LinksMvcEndpoint+.*(..))")
 		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
 			return new EndpointResource(joinPoint.proceed(),
 					(MvcEndpoint) joinPoint.getTarget());
@@ -164,12 +148,18 @@ class EndpointResource extends ResourceSupport {
 	@JsonCreator
 	public EndpointResource(Object embedded, MvcEndpoint endpoint) {
 		this.embedded = embedded;
-		add(linkTo(endpoint.getEndpointType()).slash(endpoint.getPath().substring(1))
-				.withSelfRel());
+		Class<?> type = endpoint.getEndpointType();
+		type = type == null ? Object.class : type;
+		String rel = endpoint.getPath();
+		rel = rel.startsWith("/") ? rel.substring(1) : rel;
+		add(linkTo(type).slash(rel).withSelfRel());
 	}
 
 	@JsonProperty("_embedded")
 	public Object getEmbedded() {
+		if (this.embedded instanceof Collection) {
+			return Collections.singletonMap("content", this.embedded);
+		}
 		return this.embedded;
 	}
 
