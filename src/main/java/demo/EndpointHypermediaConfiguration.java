@@ -40,6 +40,7 @@ import org.springframework.hateoas.ResourceSupport;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -60,8 +61,8 @@ public class EndpointHypermediaConfiguration {
 	MvcEndpoints endpoints;
 
 	@Bean
-	public LinksMvcEndpoint linksMvcEndpoint() {
-		return new LinksMvcEndpoint(this.endpoints);
+	public LinksMvcEndpoint linksMvcEndpoint(ManagementServerProperties management) {
+		return new LinksMvcEndpoint(this.endpoints, management.getContextPath());
 	}
 
 	@Bean
@@ -72,12 +73,16 @@ public class EndpointHypermediaConfiguration {
 	@Aspect
 	@Component
 	public static class WebEndpointPostProcessorConfiguration {
+
+		@Autowired
+		ManagementServerProperties management;
+
 		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public "
 				+ "* org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))"
 				+ " && !execution(* endpoints.LinksMvcEndpoint+.*(..))")
 		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
 			return new EndpointResource(joinPoint.proceed(),
-					(MvcEndpoint) joinPoint.getTarget());
+					(MvcEndpoint) joinPoint.getTarget(), this.management.getContextPath());
 		}
 	}
 
@@ -87,13 +92,16 @@ public class EndpointHypermediaConfiguration {
 		@Autowired
 		MvcEndpoints endpoints;
 
+		@Autowired
+		ManagementServerProperties management;
+
 		@PostConstruct
 		public void init() {
 			for (MvcEndpoint bean : this.endpoints.getEndpoints()) {
 				if (bean instanceof EndpointMvcAdapter) {
 					EndpointMvcAdapter adapter = (EndpointMvcAdapter) bean;
 					GenericEndpointAdapter endpoint = new GenericEndpointAdapter(
-							adapter.getDelegate(), adapter);
+							adapter.getDelegate(), adapter, this.management.getContextPath());
 					/*
 					 * This works, but it is fragile (reflection)
 					 */
@@ -113,10 +121,13 @@ class GenericEndpointAdapter implements Endpoint<EndpointResource> {
 
 	private Endpoint<?> delegate;
 	private EndpointMvcAdapter generic;
+	private String rootPath;
 
-	public GenericEndpointAdapter(Endpoint<?> endpoint, EndpointMvcAdapter generic) {
+	public GenericEndpointAdapter(Endpoint<?> endpoint, EndpointMvcAdapter generic,
+			String rootPath) {
 		this.delegate = endpoint;
 		this.generic = generic;
+		this.rootPath = rootPath;
 	}
 
 	@Override
@@ -136,7 +147,7 @@ class GenericEndpointAdapter implements Endpoint<EndpointResource> {
 
 	@Override
 	public EndpointResource invoke() {
-		return new EndpointResource(this.delegate.invoke(), this.generic);
+		return new EndpointResource(this.delegate.invoke(), this.generic, this.rootPath);
 	}
 
 }
@@ -146,13 +157,13 @@ class EndpointResource extends ResourceSupport {
 	private Object embedded;
 
 	@JsonCreator
-	public EndpointResource(Object embedded, MvcEndpoint endpoint) {
+	public EndpointResource(Object embedded, MvcEndpoint endpoint, String rootPath) {
 		this.embedded = embedded;
 		Class<?> type = endpoint.getEndpointType();
 		type = type == null ? Object.class : type;
 		String rel = endpoint.getPath();
-		rel = rel.startsWith("/") ? rel.substring(1) : rel;
-		add(linkTo(type).slash(rel).withSelfRel());
+		rel = rel.startsWith("/") && !StringUtils.hasText(rootPath) ? rel.substring(1) : rel;
+		add(linkTo(type).slash(rootPath + rel).withSelfRel());
 	}
 
 	@JsonProperty("_embedded")

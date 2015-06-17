@@ -40,8 +40,11 @@ public class LinksMvcEndpoint implements MvcEndpoint {
 
 	private MvcEndpoints endpoints;
 
-	public LinksMvcEndpoint(MvcEndpoints endpoints) {
+	private String rootPath;
+
+	public LinksMvcEndpoint(MvcEndpoints endpoints, String rootPath) {
 		this.endpoints = endpoints;
+		this.rootPath = rootPath;
 	}
 
 	@RequestMapping(value = { "/", "" })
@@ -50,7 +53,7 @@ public class LinksMvcEndpoint implements MvcEndpoint {
 		ResourceSupport map = new ResourceSupport();
 		String rel = this.path.startsWith("/") ? this.path.substring(1)
 				: StringUtils.hasText(this.path) ? this.path : "links";
-		map.add(linkTo(EndpointHypermediaConfiguration.class).slash(getPath()).withRel(
+		map.add(linkTo(EndpointHypermediaConfiguration.class).slash(this.rootPath + getPath()).withRel(
 				rel));
 		for (MvcEndpoint endpoint : this.endpoints.getEndpoints()) {
 			if (endpoint.getPath().equals(this.getPath())) {
@@ -60,7 +63,7 @@ public class LinksMvcEndpoint implements MvcEndpoint {
 			if (type == null) {
 				type = Object.class;
 			}
-			map.add(linkTo(type).slash(endpoint.getPath()).withRel(
+			map.add(linkTo(type).slash(this.rootPath + endpoint.getPath()).withRel(
 					endpoint.getPath().substring(1)));
 		}
 		return map;
