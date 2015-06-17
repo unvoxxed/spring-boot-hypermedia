@@ -36,7 +36,7 @@ we can also browse them using this tool.
 Get Java and Maven (3) and do this on the command line:
 
 ```
-$ mvn sring-boot:run
+$ mvn spring-boot:run
 ```
 
 Visit the home page at http://localhost:8080 and you will see a list
