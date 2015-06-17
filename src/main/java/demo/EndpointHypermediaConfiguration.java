@@ -38,6 +38,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -66,15 +68,29 @@ public class EndpointHypermediaConfiguration {
 		return map;
 	}
 
-	@RequestMapping("/browse")
+	@RequestMapping("/hal")
+	public String redirect() {
+		return "redirect:/hal/";
+	}
+
+	@RequestMapping("/hal/")
 	public String browse() {
-		return "redirect:/webjars/hal-browser/b7669f1-1/browser.html";
+		return "forward:/hal/browser.html";
+	}
+
+	@Component
+	public static class HalConfigurer extends WebMvcConfigurerAdapter {
+		@Override
+		public void addResourceHandlers(ResourceHandlerRegistry registry) {
+			registry.addResourceHandler("/hal/**").addResourceLocations("classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1/");
+		}
 	}
 
 	@Aspect
 	@Component
 	public static class WebEndpointPostProcessorConfiguration {
-		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public * org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))")
+		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public "
+				+ "* org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))")
 		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
 			return new EndpointResource(joinPoint.proceed(),
 					(MvcEndpoint) joinPoint.getTarget());
@@ -94,6 +110,9 @@ public class EndpointHypermediaConfiguration {
 					EndpointMvcAdapter adapter = (EndpointMvcAdapter) bean;
 					GenericEndpointAdapter endpoint = new GenericEndpointAdapter(
 							adapter.getDelegate(), adapter);
+					/*
+					 * This works, but it is fragile (reflection)
+					 */
 					Field field = ReflectionUtils.findField(EndpointMvcAdapter.class,
 							"delegate");
 					ReflectionUtils.makeAccessible(field);
