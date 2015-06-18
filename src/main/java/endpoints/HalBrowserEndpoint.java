@@ -17,8 +17,9 @@
 package endpoints;
 
 import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties;
+import org.springframework.boot.actuate.endpoint.Endpoint;
+import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
@@ -28,26 +29,28 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter
  *
  */
 @ConfigurationProperties("endpoints.hal")
-@Controller
-public class HalBrowserEndpoint extends WebMvcConfigurerAdapter {
+public class HalBrowserEndpoint extends WebMvcConfigurerAdapter implements MvcEndpoint {
 
 	private String path = "/hal";
 
 	private ManagementServerProperties management;
 
+	private boolean sensitive;
+
 	public HalBrowserEndpoint(ManagementServerProperties management) {
 		this.management = management;
 	}
 
-	@RequestMapping("${management.contextPath:${management.context-path:}}${endpoints.hal.path:/hal}/")
+	@RequestMapping("/")
 	public String browse() {
 		return "forward:" + this.management.getContextPath() + this.path
 				+ "/browser.html";
 	}
 
-	@RequestMapping("${management.contextPath:${management.context-path:}}${endpoints.hal.path:/hal}")
+	@RequestMapping("")
 	public String redirect() {
-		return "redirect:" + this.management.getContextPath() + this.path + "/#" + this.management.getContextPath();
+		return "redirect:" + this.management.getContextPath() + this.path + "/#"
+				+ this.management.getContextPath();
 	}
 
 	@Override
@@ -61,8 +64,23 @@ public class HalBrowserEndpoint extends WebMvcConfigurerAdapter {
 		this.path = path;
 	}
 
+	@Override
 	public String getPath() {
 		return this.path;
+	}
+
+	public void setSensitive(boolean sensitive) {
+		this.sensitive = sensitive;
+	}
+
+	@Override
+	public boolean isSensitive() {
+		return this.sensitive;
+	}
+
+	@Override
+	public Class<? extends Endpoint<?>> getEndpointType() {
+		return null;
 	}
 
 }
