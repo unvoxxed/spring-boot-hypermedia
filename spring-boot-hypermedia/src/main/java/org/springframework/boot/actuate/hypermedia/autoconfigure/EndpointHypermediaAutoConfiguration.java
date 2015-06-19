@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package autoconfigure;
+package org.springframework.boot.actuate.hypermedia.autoconfigure;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
@@ -35,6 +35,8 @@ import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.EndpointMvcAdapter;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
+import org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint;
+import org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
@@ -51,9 +53,6 @@ import org.springframework.util.StringUtils;
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import endpoints.HalBrowserEndpoint;
-import endpoints.LinksMvcEndpoint;
 
 /**
  * @author Dave Syer
@@ -88,8 +87,8 @@ public class EndpointHypermediaAutoConfiguration {
 
 		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public "
 				+ "* org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))"
-				+ " && !execution(* endpoints.LinksMvcEndpoint+.*(..))"
-				+ " && !execution(* endpoints.HalBrowserEndpoint+.*(..))")
+				+ " && !execution(* org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint+.*(..))"
+				+ " && !execution(* org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint+.*(..))")
 		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
 			return new EndpointResource(joinPoint.proceed(), this.mapper,
 					(MvcEndpoint) joinPoint.getTarget(), this.management.getContextPath());

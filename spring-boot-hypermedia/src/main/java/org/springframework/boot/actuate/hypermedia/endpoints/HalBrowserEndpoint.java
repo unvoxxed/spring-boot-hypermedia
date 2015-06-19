@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package endpoints;
+package org.springframework.boot.actuate.hypermedia.endpoints;
 
 import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties;
 import org.springframework.boot.actuate.endpoint.Endpoint;

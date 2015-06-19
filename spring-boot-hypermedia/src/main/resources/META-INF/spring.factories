@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-autoconfigure.EndpointHypermediaAutoConfiguration
+org.springframework.boot.actuate.hypermedia.autoconfigure.EndpointHypermediaAutoConfiguration

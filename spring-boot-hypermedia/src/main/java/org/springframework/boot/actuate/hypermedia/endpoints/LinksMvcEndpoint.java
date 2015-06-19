@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package endpoints;
+package org.springframework.boot.actuate.hypermedia.endpoints;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
@@ -24,13 +24,12 @@ import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
+import org.springframework.boot.actuate.hypermedia.autoconfigure.EndpointHypermediaAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
-
-import autoconfigure.EndpointHypermediaAutoConfiguration;
 
 /**
  * @author Dave Syer
