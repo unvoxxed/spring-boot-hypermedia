@@ -28,13 +28,18 @@ import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint;
+import org.springframework.boot.actuate.hypermedia.endpoints.LinksEnhancer;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.hateoas.HypermediaAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
+import org.springframework.hateoas.Link;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -54,16 +59,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  */
 @Configuration
+@ConditionalOnClass(Link.class)
+@ConditionalOnWebApplication
 @AutoConfigureAfter(HypermediaAutoConfiguration.class)
 public class EndpointHypermediaAutoConfiguration {
 
 	@Bean
+	@ConditionalOnProperty(value="endpoints.links.enabled", matchIfMissing=true)
 	public LinksMvcEndpoint linksMvcEndpoint(BeanFactory beanFactory,
 			ManagementServerProperties management) {
-		return new LinksMvcEndpoint(beanFactory, management.getContextPath());
+		return new LinksMvcEndpoint(new LinksEnhancer(beanFactory,
+				management.getContextPath()));
 	}
 
 	@Bean
+	@ConditionalOnProperty(value="endpoints.hal.enabled", matchIfMissing=true)
 	@ConditionalOnResource(resources = "classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1")
 	public HalBrowserEndpoint halBrowserMvcEndpoint(ManagementServerProperties management) {
 		return new HalBrowserEndpoint(management);

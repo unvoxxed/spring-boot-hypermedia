@@ -16,18 +16,10 @@
 
 package org.springframework.boot.actuate.hypermedia.endpoints;
 
-import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
-
-import java.util.Set;
-
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
-import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
-import org.springframework.boot.actuate.hypermedia.autoconfigure.EndpointHypermediaAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.hateoas.ResourceSupport;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -40,44 +32,18 @@ public class LinksMvcEndpoint implements MvcEndpoint {
 
 	private String path = "";
 
-	private MvcEndpoints endpoints;
+	private LinksEnhancer linksEnhancer;
 
-	private String rootPath;
-
-	private BeanFactory beanFactory;
-
-	public LinksMvcEndpoint(BeanFactory beanFactory, String rootPath) {
-		this.beanFactory = beanFactory;
-		this.rootPath = rootPath;
+	public LinksMvcEndpoint(LinksEnhancer linksEnhancer) {
+		this.linksEnhancer = linksEnhancer;
 	}
 
 	@RequestMapping(value = { "/", "" })
 	@ResponseBody
 	public ResourceSupport links() {
-		ResourceSupport map = new ResourceSupport();
-		String rel = this.path.startsWith("/") ? this.path.substring(1) : StringUtils
-				.hasText(this.path) ? this.path : "links";
-		map.add(linkTo(EndpointHypermediaAutoConfiguration.class).slash(
-				this.rootPath + getPath()).withRel(rel));
-		for (MvcEndpoint endpoint : getEndpoints()) {
-			if (endpoint.getPath().equals(this.getPath())) {
-				continue;
-			}
-			Class<?> type = endpoint.getEndpointType();
-			if (type == null) {
-				type = Object.class;
-			}
-			map.add(linkTo(type).slash(this.rootPath + endpoint.getPath()).withRel(
-					endpoint.getPath().substring(1)));
-		}
-		return map;
-	}
-
-	private Set<? extends MvcEndpoint> getEndpoints() {
-		if (this.endpoints == null) {
-			this.endpoints = this.beanFactory.getBean(MvcEndpoints.class);
-		}
-		return this.endpoints.getEndpoints();
+		ResourceSupport resource = new ResourceSupport();
+		this.linksEnhancer.addEndpointLinks(resource, this.path);
+		return resource;
 	}
 
 	public void setPath(String path) {
