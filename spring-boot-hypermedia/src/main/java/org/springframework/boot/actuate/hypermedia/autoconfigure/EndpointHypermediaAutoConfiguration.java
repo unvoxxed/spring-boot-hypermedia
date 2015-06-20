@@ -18,37 +18,32 @@ package org.springframework.boot.actuate.hypermedia.autoconfigure;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
-import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import javax.annotation.PostConstruct;
-
-import org.aspectj.lang.ProceedingJoinPoint;
-import org.aspectj.lang.annotation.Around;
-import org.aspectj.lang.annotation.Aspect;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties;
-import org.springframework.boot.actuate.endpoint.Endpoint;
-import org.springframework.boot.actuate.endpoint.mvc.EndpointMvcAdapter;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
-import org.springframework.boot.autoconfigure.AutoConfigureBefore;
-import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.boot.autoconfigure.hateoas.HypermediaAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.core.MethodParameter;
 import org.springframework.hateoas.ResourceSupport;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -59,13 +54,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  */
 @Configuration
-@EnableAspectJAutoProxy(proxyTargetClass = true)
 @AutoConfigureAfter(HypermediaAutoConfiguration.class)
-@AutoConfigureBefore(AopAutoConfiguration.class)
 public class EndpointHypermediaAutoConfiguration {
 
 	@Bean
-	public LinksMvcEndpoint linksMvcEndpoint(BeanFactory beanFactory, ManagementServerProperties management) {
+	public LinksMvcEndpoint linksMvcEndpoint(BeanFactory beanFactory,
+			ManagementServerProperties management) {
 		return new LinksMvcEndpoint(beanFactory, management.getContextPath());
 	}
 
@@ -75,28 +69,13 @@ public class EndpointHypermediaAutoConfiguration {
 		return new HalBrowserEndpoint(management);
 	}
 
-	@Aspect
+	@ControllerAdvice(assignableTypes = MvcEndpoint.class)
 	@Component
-	public static class WebEndpointPostProcessorConfiguration {
+	public static class WebEndpointPostProcessorConfiguration implements
+	ResponseBodyAdvice<Object> {
 
 		@Autowired
 		ManagementServerProperties management;
-
-		@Autowired
-		ObjectMapper mapper;
-
-		@Around("execution(@org.springframework.web.bind.annotation.RequestMapping public "
-				+ "* org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint+.*(..))"
-				+ " && !execution(* org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint+.*(..))"
-				+ " && !execution(* org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint+.*(..))")
-		public Object enhance(ProceedingJoinPoint joinPoint) throws Throwable {
-			return new EndpointResource(joinPoint.proceed(), this.mapper,
-					(MvcEndpoint) joinPoint.getTarget(), this.management.getContextPath());
-		}
-	}
-
-	@Component
-	public static class GenericEndpointPostProcessor {
 
 		@Autowired
 		MvcEndpoints endpoints;
@@ -104,66 +83,33 @@ public class EndpointHypermediaAutoConfiguration {
 		@Autowired
 		ObjectMapper mapper;
 
-		@Autowired
-		ManagementServerProperties management;
-
-		@PostConstruct
-		public void init() {
-			for (MvcEndpoint bean : this.endpoints.getEndpoints()) {
-				if (bean instanceof EndpointMvcAdapter) {
-					EndpointMvcAdapter adapter = (EndpointMvcAdapter) bean;
-					GenericEndpointAdapter endpoint = new GenericEndpointAdapter(
-							adapter.getDelegate(), adapter, this.mapper,
-							this.management.getContextPath());
-					/*
-					 * This works, but it is fragile (reflection)
-					 */
-					Field field = ReflectionUtils.findField(EndpointMvcAdapter.class,
-							"delegate");
-					ReflectionUtils.makeAccessible(field);
-					ReflectionUtils.setField(field, adapter, endpoint);
-				}
-			}
+		@Override
+		public boolean supports(MethodParameter returnType,
+				Class<? extends HttpMessageConverter<?>> converterType) {
+			Class<?> controllerType = returnType.getDeclaringClass();
+			return !LinksMvcEndpoint.class.isAssignableFrom(controllerType)
+					&& !HalBrowserEndpoint.class.isAssignableFrom(controllerType);
 		}
 
-	}
+		@Override
+		public Object beforeBodyWrite(Object body, MethodParameter returnType,
+				MediaType selectedContentType,
+				Class<? extends HttpMessageConverter<?>> selectedConverterType,
+						ServerHttpRequest request, ServerHttpResponse response) {
+			Class<?> controllerType = returnType.getDeclaringClass();
+			return new EndpointResource(body, this.mapper, findPath(controllerType),
+					this.management.getContextPath());
+		}
 
-}
+		private String findPath(Class<?> controllerType) {
+			for (MvcEndpoint endpoint : this.endpoints.getEndpoints()) {
+				if (controllerType.isAssignableFrom(endpoint.getClass())) {
+					return endpoint.getPath();
+				}
+			}
+			return "";
+		}
 
-class GenericEndpointAdapter implements Endpoint<EndpointResource> {
-
-	private Endpoint<?> delegate;
-	private EndpointMvcAdapter generic;
-	private String rootPath;
-	private ObjectMapper mapper;
-
-	public GenericEndpointAdapter(Endpoint<?> endpoint, EndpointMvcAdapter generic,
-			ObjectMapper mapper, String rootPath) {
-		this.delegate = endpoint;
-		this.generic = generic;
-		this.mapper = mapper;
-		this.rootPath = rootPath;
-	}
-
-	@Override
-	public String getId() {
-		return this.delegate.getId();
-	}
-
-	@Override
-	public boolean isEnabled() {
-		return this.delegate.isEnabled();
-	}
-
-	@Override
-	public boolean isSensitive() {
-		return this.delegate.isSensitive();
-	}
-
-	@Override
-	public EndpointResource invoke() {
-		return new EndpointResource(this.delegate.invoke(), this.mapper, this.generic,
-				this.rootPath);
 	}
 
 }
@@ -176,16 +122,14 @@ class EndpointResource extends ResourceSupport {
 	private ObjectMapper mapper;
 
 	@JsonCreator
-	public EndpointResource(Object embedded, ObjectMapper mapper, MvcEndpoint endpoint,
+	public EndpointResource(Object embedded, ObjectMapper mapper, String path,
 			String rootPath) {
 		this.embedded = embedded;
 		this.mapper = mapper;
-		Class<?> type = endpoint.getEndpointType();
-		type = type == null ? Object.class : type;
-		this.rel = endpoint.getPath();
+		this.rel = path;
 		this.rel = this.rel.startsWith("/") && !StringUtils.hasText(rootPath) ? this.rel
 				.substring(1) : this.rel;
-				add(linkTo(type).slash(rootPath + this.rel).withSelfRel());
+				add(linkTo(Object.class).slash(rootPath + this.rel).withSelfRel());
 				flatten();
 	}
 
