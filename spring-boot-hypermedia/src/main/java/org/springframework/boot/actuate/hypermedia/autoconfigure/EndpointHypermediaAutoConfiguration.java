@@ -31,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
+import org.springframework.boot.actuate.hypermedia.endpoints.ActuatorDocsEndpoint;
 import org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksEnhancer;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint;
@@ -85,6 +86,13 @@ public class EndpointHypermediaAutoConfiguration {
 	@ConditionalOnResource(resources = "classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1")
 	public HalBrowserEndpoint halBrowserMvcEndpoint(ManagementServerProperties management) {
 		return new HalBrowserEndpoint(management);
+	}
+
+	@Bean
+	@ConditionalOnProperty(value = "endpoints.docs.enabled", matchIfMissing = true)
+	@ConditionalOnResource(resources = "classpath:/static/docs/index.html")
+	public ActuatorDocsEndpoint actuatorDocsEndpoint(ManagementServerProperties management) {
+		return new ActuatorDocsEndpoint(management);
 	}
 
 	/**

@@ -84,3 +84,32 @@ will serve up a static HTML page with some JavaScript that lets you browse the a
 resources. Example:
 
 image::hal-browser.png[HAL Browser]
+
+== Actuator Documentation Browser
+
+You can also provide a browser for the standard generated documentation 
+for the Actuator endpoints by including a dependency on the documentation jar. 
+For example in Maven:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-hypermedia-docs</artifactId>
+</dependency>
+----
+
+
+or in Gradle
+
+[source,groovy]
+----
+dependencies {
+   ...
+   compile('org.springframework.boot:spring-boot-hypermedia-docs')
+   ...
+}
+----
+
+If you do that then a new endpoint at "/docs" (relative to the `management.contextPath`)
+will serve up a static HTML page with this documentation in it.
