@@ -18,9 +18,13 @@ package org.springframework.boot.actuate.hypermedia.autoconfigure;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
+import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import javax.annotation.PostConstruct;
+import javax.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,8 +40,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.hateoas.HypermediaAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.HttpMessageConverters;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.core.MethodParameter;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.ResourceSupport;
@@ -47,7 +53,9 @@ import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.util.TypeUtils;
 import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
@@ -65,30 +73,110 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class EndpointHypermediaAutoConfiguration {
 
 	@Bean
-	@ConditionalOnProperty(value="endpoints.links.enabled", matchIfMissing=true)
+	@ConditionalOnProperty(value = "endpoints.links.enabled", matchIfMissing = true)
 	public LinksMvcEndpoint linksMvcEndpoint(BeanFactory beanFactory,
 			ManagementServerProperties management) {
-		return new LinksMvcEndpoint(new LinksEnhancer(beanFactory,
-				management.getContextPath()));
+		return new LinksMvcEndpoint();
 	}
 
 	@Bean
-	@ConditionalOnProperty(value="endpoints.hal.enabled", matchIfMissing=true)
+	@ConditionalOnProperty(value = "endpoints.hal.enabled", matchIfMissing = true)
 	@ConditionalOnResource(resources = "classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1")
 	public HalBrowserEndpoint halBrowserMvcEndpoint(ManagementServerProperties management) {
 		return new HalBrowserEndpoint(management);
 	}
 
+	@ControllerAdvice
+	@Component
+	@Scope("request")
+	public static class LinksAdvice implements ResponseBodyAdvice<Object> {
+
+		@Autowired
+		HttpServletRequest servletRequest;
+
+		@Autowired
+		BeanFactory beanFactory;
+
+		@Autowired
+		ManagementServerProperties management;
+
+		private LinksEnhancer linksEnhancer;
+
+		@PostConstruct
+		public void init() {
+			this.linksEnhancer = new LinksEnhancer(this.beanFactory,
+					this.management.getContextPath());
+		}
+
+		@Override
+		public boolean supports(MethodParameter returnType,
+				Class<? extends HttpMessageConverter<?>> converterType) {
+			Class<?> controllerType = returnType.getDeclaringClass();
+			if (!LinksMvcEndpoint.class.isAssignableFrom(controllerType)
+					&& MvcEndpoint.class.isAssignableFrom(controllerType)) {
+				return false;
+			}
+			returnType.increaseNestingLevel();
+			Type nestedType = returnType.getNestedGenericParameterType();
+			returnType.decreaseNestingLevel();
+			return ResourceSupport.class.isAssignableFrom(returnType.getParameterType())
+					|| TypeUtils.isAssignable(ResourceSupport.class, nestedType);
+		}
+
+		@Override
+		public Object beforeBodyWrite(Object body, MethodParameter returnType,
+				MediaType selectedContentType,
+				Class<? extends HttpMessageConverter<?>> selectedConverterType,
+						ServerHttpRequest request, ServerHttpResponse response) {
+			Object pattern = this.servletRequest
+					.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+			if (pattern != null) {
+				String path = pattern.toString();
+				if (isHomePage(path) || isManagementPath(path)) {
+					ResourceSupport resource = (ResourceSupport) body;
+					if (isHomePage(path) && hasManagementPath()) {
+						String rel = this.management.getContextPath().substring(1);
+						resource.add(linkTo(EndpointHypermediaAutoConfiguration.class)
+								.slash(this.management.getContextPath()).withRel(rel));
+					}
+					else {
+						this.linksEnhancer.addEndpointLinks(resource, "");
+					}
+				}
+			}
+			return body;
+		}
+
+		private boolean hasManagementPath() {
+			return StringUtils.hasText(this.management.getContextPath());
+		}
+
+		private boolean isManagementPath(String path) {
+			return this.management.getContextPath().equals(path);
+		}
+
+		private boolean isHomePage(String path) {
+			return "".equals("path") || "/".equals(path);
+		}
+
+	}
+
 	@ControllerAdvice(assignableTypes = MvcEndpoint.class)
 	@Component
-	public static class WebEndpointPostProcessorConfiguration implements
-	ResponseBodyAdvice<Object> {
+	@Scope("request")
+	public static class MvcEndpointAdvice implements ResponseBodyAdvice<Object> {
+
+		@Autowired
+		HttpServletRequest servletRequest;
 
 		@Autowired
 		ManagementServerProperties management;
 
 		@Autowired
 		MvcEndpoints endpoints;
+
+		@Autowired
+		HttpMessageConverters converters;
 
 		@Autowired
 		ObjectMapper mapper;
@@ -106,18 +194,41 @@ public class EndpointHypermediaAutoConfiguration {
 				MediaType selectedContentType,
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
 						ServerHttpRequest request, ServerHttpResponse response) {
-			Class<?> controllerType = returnType.getDeclaringClass();
-			return new EndpointResource(body, this.mapper, findPath(controllerType),
+
+			HttpMessageConverter<?> converter = findConverter(selectedConverterType,
+					getReturnType(body, returnType), selectedContentType);
+			if (converter != null
+					&& !converter.canWrite(ResourceSupport.class, selectedContentType)) {
+				// Not a resource that can be enhanced with a link
+				return body;
+			}
+
+			String path = "";
+			Object pattern = this.servletRequest
+					.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+			if (pattern != null) {
+				path = pattern.toString();
+			}
+
+			return new EndpointResource(body, this.mapper, path,
 					this.management.getContextPath());
+
 		}
 
-		private String findPath(Class<?> controllerType) {
-			for (MvcEndpoint endpoint : this.endpoints.getEndpoints()) {
-				if (controllerType.isAssignableFrom(endpoint.getClass())) {
-					return endpoint.getPath();
+		private HttpMessageConverter<?> findConverter(
+				Class<? extends HttpMessageConverter<?>> selectedConverterType,
+						Class<?> returnType, MediaType mediaType) {
+			for (HttpMessageConverter<?> converter : this.converters) {
+				if (selectedConverterType.isAssignableFrom(converter.getClass())
+						&& converter.canWrite(returnType, mediaType)) {
+					return converter;
 				}
 			}
-			return "";
+			return null;
+		}
+
+		private Class<?> getReturnType(Object body, MethodParameter returnType) {
+			return body != null ? body.getClass() : returnType.getParameterType();
 		}
 
 	}
@@ -157,7 +268,12 @@ class EndpointResource extends ResourceSupport {
 			this.details.putAll((Map<String, Object>) this.embedded);
 		}
 		else {
-			this.details.putAll(this.mapper.convertValue(this.embedded, Map.class));
+			try {
+				this.details.putAll(this.mapper.convertValue(this.embedded, Map.class));
+			}
+			catch (Exception e) {
+				this.details.put("value", this.embedded);
+			}
 		}
 	}
 

@@ -32,17 +32,10 @@ public class LinksMvcEndpoint implements MvcEndpoint {
 
 	private String path = "";
 
-	private LinksEnhancer linksEnhancer;
-
-	public LinksMvcEndpoint(LinksEnhancer linksEnhancer) {
-		this.linksEnhancer = linksEnhancer;
-	}
-
 	@RequestMapping(value = { "/", "" })
 	@ResponseBody
 	public ResourceSupport links() {
 		ResourceSupport resource = new ResourceSupport();
-		this.linksEnhancer.addEndpointLinks(resource, this.path);
 		return resource;
 	}
 
