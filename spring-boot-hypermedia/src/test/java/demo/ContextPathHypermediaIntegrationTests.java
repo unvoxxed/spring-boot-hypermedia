@@ -69,7 +69,7 @@ public class ContextPathHypermediaIntegrationTests {
 		.andExpect(
 				jsonPath("$._links.self.href").value(
 						"http://localhost/admin/trace"))
-						.andExpect(jsonPath("$.trace").isArray());
+						.andExpect(jsonPath("$.content").isArray());
 	}
 
 	@Test

@@ -47,7 +47,7 @@ include::{generated}/admin/http-response.adoc[]
 === Endpoints with format changes 
 Some endpoints in their "raw" form consist of an array (e.g. the "/beans" and the "/trace" endpoints).
 These need to be converted to objects (maps) before they can be enhanced with
-links, so their contents are inserted as a field named as the endpoint (e.g. "beans" for the "/beans" endpoint).
+links, so their contents are inserted as a field named "content".
 Example enhanced "/beans" endpoint with additional "_links":
 
 include::{generated}/beans/hypermedia/http-response.adoc[]

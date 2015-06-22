@@ -55,7 +55,7 @@ public class VanillaHypermediaIntegrationTests {
 		.perform(get("/trace").accept(MediaType.APPLICATION_JSON))
 		.andExpect(status().isOk())
 		.andExpect(jsonPath("$._links.self.href").value("http://localhost/trace"))
-		.andExpect(jsonPath("$.trace").isArray());
+		.andExpect(jsonPath("$.content").isArray());
 	}
 
 	@Test

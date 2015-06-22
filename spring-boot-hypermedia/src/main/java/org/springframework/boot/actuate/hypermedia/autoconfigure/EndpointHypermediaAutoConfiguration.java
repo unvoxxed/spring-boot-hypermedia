@@ -19,9 +19,8 @@ package org.springframework.boot.actuate.hypermedia.autoconfigure;
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
 import java.lang.reflect.Type;
-import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
@@ -44,7 +43,6 @@ import org.springframework.boot.autoconfigure.hateoas.HypermediaAutoConfiguratio
 import org.springframework.boot.autoconfigure.web.HttpMessageConverters;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Scope;
 import org.springframework.core.MethodParameter;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.ResourceSupport;
@@ -52,7 +50,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.stereotype.Component;
+import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.util.StringUtils;
 import org.springframework.util.TypeUtils;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -60,7 +58,11 @@ import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 
 /**
  * Autoconfiguration for hypermedia in HTTP endpoints.
@@ -104,12 +106,7 @@ public class EndpointHypermediaAutoConfiguration {
 	 *
 	 */
 	@ControllerAdvice
-	@Component
-	@Scope("request")
 	public static class HomePageLinksAdvice implements ResponseBodyAdvice<Object> {
-
-		@Autowired
-		HttpServletRequest servletRequest;
 
 		@Autowired
 		MvcEndpoints endpoints;
@@ -145,19 +142,23 @@ public class EndpointHypermediaAutoConfiguration {
 				MediaType selectedContentType,
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
 						ServerHttpRequest request, ServerHttpResponse response) {
-			Object pattern = this.servletRequest
-					.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-			if (pattern != null) {
-				String path = pattern.toString();
-				if (isHomePage(path) || isManagementPath(path)) {
-					ResourceSupport resource = (ResourceSupport) body;
-					if (isHomePage(path) && hasManagementPath()) {
-						String rel = this.management.getContextPath().substring(1);
-						resource.add(linkTo(EndpointHypermediaAutoConfiguration.class)
-								.slash(this.management.getContextPath()).withRel(rel));
-					}
-					else {
-						this.linksEnhancer.addEndpointLinks(resource, "");
+			HttpServletRequest servletRequest = null;
+			if (request instanceof ServletServerHttpRequest) {
+				servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
+				Object pattern = servletRequest
+						.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+				if (pattern != null) {
+					String path = pattern.toString();
+					if (isHomePage(path) || isManagementPath(path)) {
+						ResourceSupport resource = (ResourceSupport) body;
+						if (isHomePage(path) && hasManagementPath()) {
+							String rel = this.management.getContextPath().substring(1);
+							resource.add(linkTo(EndpointHypermediaAutoConfiguration.class)
+									.slash(this.management.getContextPath()).withRel(rel));
+						}
+						else {
+							this.linksEnhancer.addEndpointLinks(resource, "");
+						}
 					}
 				}
 			}
@@ -173,7 +174,7 @@ public class EndpointHypermediaAutoConfiguration {
 		}
 
 		private boolean isHomePage(String path) {
-			return "".equals("path") || "/".equals(path);
+			return "".equals(path) || "/".equals(path);
 		}
 
 	}
@@ -190,18 +191,15 @@ public class EndpointHypermediaAutoConfiguration {
 	 *
 	 */
 	@ControllerAdvice(assignableTypes = MvcEndpoint.class)
-	@Component
-	@Scope("request")
 	public static class MvcEndpointAdvice implements ResponseBodyAdvice<Object> {
-
-		@Autowired
-		HttpServletRequest servletRequest;
 
 		@Autowired
 		ManagementServerProperties management;
 
 		@Autowired
 		HttpMessageConverters converters;
+
+		private Map<MediaType, HttpMessageConverter<?>> converterCache = new ConcurrentHashMap<MediaType, HttpMessageConverter<?>>();
 
 		@Autowired
 		ObjectMapper mapper;
@@ -221,82 +219,70 @@ public class EndpointHypermediaAutoConfiguration {
 						ServerHttpRequest request, ServerHttpResponse response) {
 
 			HttpMessageConverter<?> converter = findConverter(selectedConverterType,
-					getReturnType(body, returnType), selectedContentType);
+					selectedContentType);
 			if (converter == null
 					|| !converter.canWrite(ResourceSupport.class, selectedContentType)) {
 				// Not a resource that can be enhanced with a link
 				return body;
 			}
 
-			String path = (String) this.servletRequest
-					.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-			if (path == null) {
-				path = "";
+			HttpServletRequest servletRequest = null;
+			if (request instanceof ServletServerHttpRequest) {
+				servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
+				String path = (String) servletRequest
+						.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
+				if (path == null) {
+					path = "";
+				}
+				return new EndpointResource(body, path);
 			}
-
-			return new EndpointResource(body, this.mapper, path,
-					this.management.getContextPath());
+			else {
+				return body;
+			}
 
 		}
 
 		private HttpMessageConverter<?> findConverter(
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-						Class<?> returnType, MediaType mediaType) {
+						MediaType mediaType) {
+			if (this.converterCache.containsKey(mediaType)) {
+				return this.converterCache.get(mediaType);
+			}
 			for (HttpMessageConverter<?> converter : this.converters) {
 				if (selectedConverterType.isAssignableFrom(converter.getClass())
-						&& converter.canWrite(returnType, mediaType)) {
+						&& converter.canWrite(EndpointResource.class, mediaType)) {
+					this.converterCache.put(mediaType, converter);
 					return converter;
 				}
 			}
 			return null;
 		}
 
-		private Class<?> getReturnType(Object body, MethodParameter returnType) {
-			return body != null ? body.getClass() : returnType.getParameterType();
-		}
-
 	}
 
+	@JsonInclude(content = Include.NON_NULL)
+	@JacksonXmlRootElement(localName="resource")
 	private static class EndpointResource extends ResourceSupport {
 
-		private Object embedded;
-		private Map<String, Object> details = new LinkedHashMap<String, Object>();
-		private String property;
-		private ObjectMapper mapper;
+		private Object content;
 
-		public EndpointResource(Object embedded, ObjectMapper mapper, String path,
-				String rootPath) {
-			this.embedded = embedded;
-			this.mapper = mapper;
-			this.property = path.substring(rootPath.length());
-			this.property = this.property.startsWith("/") ? this.property.substring(1)
-					: this.property;
+		private Map<String, Object> embedded;
+
+		@SuppressWarnings("unchecked")
+		public EndpointResource(Object content, String path) {
+			this.content = content instanceof Map ? null : content;
+			this.embedded = (Map<String, Object>) (this.content == null ? content : null);
 			add(linkTo(Object.class).slash(path).withSelfRel());
-			flatten();
+		}
+
+		@JsonUnwrapped
+		public Object getContent() {
+			return this.content;
 		}
 
 		@JsonAnyGetter
-		public Map<String, Object> getDetails() {
-			return this.details;
-		}
-
-		@SuppressWarnings("unchecked")
-		private void flatten() {
-			try {
-				if (this.embedded instanceof Collection) {
-					this.details.put(this.property, this.embedded);
-				}
-				else if (this.embedded instanceof Map) {
-					this.details.putAll((Map<String, Object>) this.embedded);
-				}
-				else {
-					this.details.putAll(this.mapper
-							.convertValue(this.embedded, Map.class));
-				}
-			}
-			catch (Exception e) {
-				this.details.put(this.property, this.embedded);
-			}
+		public Map<String, Object> getEmbedded() {
+			return this.embedded;
 		}
 
 	}
