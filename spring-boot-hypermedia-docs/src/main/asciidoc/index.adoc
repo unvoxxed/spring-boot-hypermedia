@@ -1,0 +1,86 @@
+= Spring Boot Actuator Endpoints
+:toc: left
+
+Actuator endpoints allow you to monitor and interact with your application. Spring Boot
+includes a number of built-in endpoints and you can also add your own. For example the
+`health` endpoint provides basic application health information.
+
+The way that endpoints are exposed will depend on the type of technology that you choose.
+Most applications choose HTTP monitoring, where the ID of the endpoint is mapped
+to a URL. For example, by default, the `health` endpoint will be mapped to `/health`.
+
+== List of Endpoints
+
+include::{generated}/endpoints.adoc[]
+
+== Hypermedia Support
+
+If https://projects.spring.io/spring-hateoas[Spring HATEOAS] is enabled 
+(i.e. if it is on the classpath by default) then the Actuator
+endpoint responses are enhanced with hypermedia in the form of "links". The default
+media type for responses is http://stateless.co/hal_specification.html[HAL], resulting
+in each resource having an extra property called "_links". You can change the
+media type to another one supported by Spring HATEOAS by providing your own 
+`@EnableHypermedia` annotation and custom providers as necessary.
+
+Example enhanced "/metrics" endpoint with additional "_links":
+
+include::{generated}/metrics/hypermedia/http-response.adoc[]
+
+WARNING: Beware of Actuator endpoint paths clashing with application endpoints.
+The easiest way to avoid that is to use a `management.contextPath`, e.g. "/admin".
+
+TIP: You can disable the hypermedia support in Actuator endpoints by setting
+`endpoints.links.enabled=false`.
+
+=== Default home page
+If the `management.contextPath` is empty, or if the home page provided
+by the application happens to be a response body of type `ResourceSupport`, then it will
+be enhanced with links to the actuator endpoints. The latter would happen for instance
+if you use Spring Data REST to expose `Repository` endpoints. 
+
+Example vanilla "/" endpoint if the `management.contextPath` is empty (the "/admin"
+page would be the same with different links if `management.contextPath=/admin`):
+
+include::{generated}/admin/http-response.adoc[]
+
+=== Endpoints with format changes 
+Some endpoints in their "raw" form consist of an array (e.g. the "/beans" and the "/trace" endpoints).
+These need to be converted to objects (maps) before they can be enhanced with
+links, so their contents are inserted as a field named as the endpoint (e.g. "beans" for the "/beans" endpoint).
+Example enhanced "/beans" endpoint with additional "_links":
+
+include::{generated}/beans/hypermedia/http-response.adoc[]
+
+== HAL Browser
+
+If Hypermedia is enabled and the HAL format is in use (which is the default), then
+you can provide a browser for the resources by including a dependency 
+on the https://github.com/mikekelly/hal-browser[HAL browser] webjar. 
+For example in Maven:
+
+[source,xml]
+----
+<dependency>
+	<groupId>org.webjars</groupId>
+	<artifactId>hal-browser</artifactId>
+</dependency>
+----
+
+
+or in Gradle
+
+[source,groovy]
+----
+dependencies {
+   ...
+   compile('org.webjars:hal-browser')
+   ...
+}
+----
+
+If you do that then a new endpoint at "/hal" (relative to the `management.contextPath`)
+will serve up a static HTML page with some JavaScript that lets you browse the available 
+resources. Example:
+
+image::hal-browser.png[HAL Browser]

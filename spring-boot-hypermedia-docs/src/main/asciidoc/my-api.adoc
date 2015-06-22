@@ -1,4 +1,0 @@
-= Endpoints
-:toc: left
-
-include::{generated}/endpoints.adoc[]
