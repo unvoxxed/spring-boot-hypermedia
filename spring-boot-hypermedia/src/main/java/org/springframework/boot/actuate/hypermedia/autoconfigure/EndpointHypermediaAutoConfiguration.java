@@ -62,6 +62,8 @@ import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
+ * Autoconfiguration for hypermedia in HTTP endpoints.
+ *
  * @author Dave Syer
  *
  */
