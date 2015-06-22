@@ -59,7 +59,6 @@ import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -137,7 +136,7 @@ public class EndpointHypermediaAutoConfiguration {
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
 						ServerHttpRequest request, ServerHttpResponse response) {
 			Object pattern = this.servletRequest
-					.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+					.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
 			if (pattern != null) {
 				String path = pattern.toString();
 				if (isHomePage(path) || isManagementPath(path)) {
@@ -192,9 +191,6 @@ public class EndpointHypermediaAutoConfiguration {
 		ManagementServerProperties management;
 
 		@Autowired
-		MvcEndpoints endpoints;
-
-		@Autowired
 		HttpMessageConverters converters;
 
 		@Autowired
@@ -216,17 +212,16 @@ public class EndpointHypermediaAutoConfiguration {
 
 			HttpMessageConverter<?> converter = findConverter(selectedConverterType,
 					getReturnType(body, returnType), selectedContentType);
-			if (converter != null
-					&& !converter.canWrite(ResourceSupport.class, selectedContentType)) {
+			if (converter == null
+					|| !converter.canWrite(ResourceSupport.class, selectedContentType)) {
 				// Not a resource that can be enhanced with a link
 				return body;
 			}
 
-			String path = "";
-			Object pattern = this.servletRequest
+			String path = (String) this.servletRequest
 					.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
-			if (pattern != null) {
-				path = pattern.toString();
+			if (path == null) {
+				path = "";
 			}
 
 			return new EndpointResource(body, this.mapper, path,
@@ -259,13 +254,13 @@ public class EndpointHypermediaAutoConfiguration {
 		private String property;
 		private ObjectMapper mapper;
 
-		@JsonCreator
 		public EndpointResource(Object embedded, ObjectMapper mapper, String path,
 				String rootPath) {
 			this.embedded = embedded;
 			this.mapper = mapper;
 			this.property = path.substring(rootPath.length());
-			this.property = this.property.startsWith("/") ? this.property.substring(1) : this.property;
+			this.property = this.property.startsWith("/") ? this.property.substring(1)
+					: this.property;
 			add(linkTo(Object.class).slash(path).withSelfRel());
 			flatten();
 		}
@@ -277,20 +272,20 @@ public class EndpointHypermediaAutoConfiguration {
 
 		@SuppressWarnings("unchecked")
 		private void flatten() {
-			if (this.embedded instanceof Collection) {
-				this.details.put(this.property, this.embedded);
-			}
-			else if (this.embedded instanceof Map) {
-				this.details.putAll((Map<String, Object>) this.embedded);
-			}
-			else {
-				try {
+			try {
+				if (this.embedded instanceof Collection) {
+					this.details.put(this.property, this.embedded);
+				}
+				else if (this.embedded instanceof Map) {
+					this.details.putAll((Map<String, Object>) this.embedded);
+				}
+				else {
 					this.details.putAll(this.mapper
 							.convertValue(this.embedded, Map.class));
 				}
-				catch (Exception e) {
-					this.details.put("value", this.embedded);
-				}
+			}
+			catch (Exception e) {
+				this.details.put(this.property, this.embedded);
 			}
 		}
 
