@@ -32,7 +32,7 @@ import demo.ContextPathHypermediaIntegrationTests.SpringBootHypermediaApplicatio
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = SpringBootHypermediaApplication.class)
 @WebAppConfiguration
-@TestPropertySource(properties="management.contextPath:/admin")
+@TestPropertySource(properties = "management.contextPath:/admin")
 @DirtiesContext
 public class ContextPathHypermediaIntegrationTests {
 
@@ -62,15 +62,28 @@ public class ContextPathHypermediaIntegrationTests {
 	}
 
 	@Test
+	public void trace() throws Exception {
+		this.mockMvc
+		.perform(get("/admin/trace").accept(MediaType.APPLICATION_JSON))
+		.andExpect(status().isOk())
+		.andExpect(
+				jsonPath("$._links.self.href").value(
+						"http://localhost/admin/trace"))
+						.andExpect(jsonPath("$.trace").isArray());
+	}
+
+	@Test
 	public void endpointsAllListed() throws Exception {
 		for (MvcEndpoint endpoint : this.mvcEndpoints.getEndpoints()) {
 			String path = endpoint.getPath();
 			path = path.startsWith("/") ? path.substring(1) : path;
-			path = path.length()>0 ? path : "self";
-			this.mockMvc.perform(get("/admin").accept(MediaType.APPLICATION_JSON))
+			path = path.length() > 0 ? path : "self";
+			this.mockMvc
+			.perform(get("/admin").accept(MediaType.APPLICATION_JSON))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$._links.%s.href", path).value(
-					"http://localhost/admin" + endpoint.getPath()));
+			.andExpect(
+					jsonPath("$._links.%s.href", path).value(
+							"http://localhost/admin" + endpoint.getPath()));
 		}
 	}
 
@@ -82,7 +95,8 @@ public class ContextPathHypermediaIntegrationTests {
 		@RequestMapping("")
 		public ResourceSupport home() {
 			ResourceSupport resource = new ResourceSupport();
-			resource.add(linkTo(SpringBootHypermediaApplication.class).slash("/").withSelfRel());
+			resource.add(linkTo(SpringBootHypermediaApplication.class).slash("/")
+					.withSelfRel());
 			return resource;
 		}
 

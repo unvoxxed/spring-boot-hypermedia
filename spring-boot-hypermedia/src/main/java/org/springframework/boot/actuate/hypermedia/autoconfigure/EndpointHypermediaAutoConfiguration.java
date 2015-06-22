@@ -69,11 +69,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Configuration
 @ConditionalOnClass(Link.class)
 @ConditionalOnWebApplication
+@ConditionalOnProperty(value = "endpoints.links.enabled", matchIfMissing = true)
 @AutoConfigureAfter(HypermediaAutoConfiguration.class)
 public class EndpointHypermediaAutoConfiguration {
 
 	@Bean
-	@ConditionalOnProperty(value = "endpoints.links.enabled", matchIfMissing = true)
 	public LinksMvcEndpoint linksMvcEndpoint(BeanFactory beanFactory,
 			ManagementServerProperties management) {
 		return new LinksMvcEndpoint();
@@ -86,16 +86,24 @@ public class EndpointHypermediaAutoConfiguration {
 		return new HalBrowserEndpoint(management);
 	}
 
+	/**
+	 * Controller advice that adds links to the home page and/or the management context
+	 * path. The home page is enhanced if it is composed already of a
+	 * {@link ResourceSupport} (e.g. when using Spring Data REST).
+	 *
+	 * @author Dave Syer
+	 *
+	 */
 	@ControllerAdvice
 	@Component
 	@Scope("request")
-	public static class LinksAdvice implements ResponseBodyAdvice<Object> {
+	public static class HomePageLinksAdvice implements ResponseBodyAdvice<Object> {
 
 		@Autowired
 		HttpServletRequest servletRequest;
 
 		@Autowired
-		BeanFactory beanFactory;
+		MvcEndpoints endpoints;
 
 		@Autowired
 		ManagementServerProperties management;
@@ -104,7 +112,7 @@ public class EndpointHypermediaAutoConfiguration {
 
 		@PostConstruct
 		public void init() {
-			this.linksEnhancer = new LinksEnhancer(this.beanFactory,
+			this.linksEnhancer = new LinksEnhancer(this.endpoints,
 					this.management.getContextPath());
 		}
 
@@ -161,6 +169,17 @@ public class EndpointHypermediaAutoConfiguration {
 
 	}
 
+	/**
+	 * Controller advice that adds links to the existing Actuator endpoints. By default
+	 * all the top-level resources are enhanced with a "self" link. Those resources that
+	 * could not be enhanced (e.g. "/env/{name}") because their values are "primitive" are
+	 * ignored. Those that have values of type Collection (e.g. /trace) are transformed in
+	 * to maps, and the original collection value is added with a key equal to the
+	 * endpoint name.
+	 *
+	 * @author Dave Syer
+	 *
+	 */
 	@ControllerAdvice(assignableTypes = MvcEndpoint.class)
 	@Component
 	@Scope("request")
@@ -233,48 +252,48 @@ public class EndpointHypermediaAutoConfiguration {
 
 	}
 
-}
+	private static class EndpointResource extends ResourceSupport {
 
-class EndpointResource extends ResourceSupport {
+		private Object embedded;
+		private Map<String, Object> details = new LinkedHashMap<String, Object>();
+		private String property;
+		private ObjectMapper mapper;
 
-	private Object embedded;
-	private Map<String, Object> details = new LinkedHashMap<String, Object>();
-	private String rel;
-	private ObjectMapper mapper;
-
-	@JsonCreator
-	public EndpointResource(Object embedded, ObjectMapper mapper, String path,
-			String rootPath) {
-		this.embedded = embedded;
-		this.mapper = mapper;
-		this.rel = path;
-		this.rel = this.rel.startsWith("/") && !StringUtils.hasText(rootPath) ? this.rel
-				.substring(1) : this.rel;
-				add(linkTo(Object.class).slash(rootPath + this.rel).withSelfRel());
-				flatten();
-	}
-
-	@JsonAnyGetter
-	public Map<String, Object> getDetails() {
-		return this.details;
-	}
-
-	@SuppressWarnings("unchecked")
-	private void flatten() {
-		if (this.embedded instanceof Collection) {
-			this.details.put(this.rel, this.embedded);
+		@JsonCreator
+		public EndpointResource(Object embedded, ObjectMapper mapper, String path,
+				String rootPath) {
+			this.embedded = embedded;
+			this.mapper = mapper;
+			this.property = path.substring(rootPath.length());
+			this.property = this.property.startsWith("/") ? this.property.substring(1) : this.property;
+			add(linkTo(Object.class).slash(path).withSelfRel());
+			flatten();
 		}
-		else if (this.embedded instanceof Map) {
-			this.details.putAll((Map<String, Object>) this.embedded);
+
+		@JsonAnyGetter
+		public Map<String, Object> getDetails() {
+			return this.details;
 		}
-		else {
-			try {
-				this.details.putAll(this.mapper.convertValue(this.embedded, Map.class));
+
+		@SuppressWarnings("unchecked")
+		private void flatten() {
+			if (this.embedded instanceof Collection) {
+				this.details.put(this.property, this.embedded);
 			}
-			catch (Exception e) {
-				this.details.put("value", this.embedded);
+			else if (this.embedded instanceof Map) {
+				this.details.putAll((Map<String, Object>) this.embedded);
+			}
+			else {
+				try {
+					this.details.putAll(this.mapper
+							.convertValue(this.embedded, Map.class));
+				}
+				catch (Exception e) {
+					this.details.put("value", this.embedded);
+				}
 			}
 		}
+
 	}
 
 }

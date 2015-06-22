@@ -18,9 +18,6 @@ package org.springframework.boot.actuate.hypermedia.endpoints;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
-import java.util.Set;
-
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.boot.actuate.hypermedia.autoconfigure.EndpointHypermediaAutoConfiguration;
@@ -37,10 +34,8 @@ public class LinksEnhancer {
 
 	private String rootPath;
 
-	private BeanFactory beanFactory;
-
-	public LinksEnhancer(BeanFactory beanFactory, String rootPath) {
-		this.beanFactory = beanFactory;
+	public LinksEnhancer(MvcEndpoints endpoints, String rootPath) {
+		this.endpoints = endpoints;
 		this.rootPath = rootPath;
 	}
 
@@ -49,7 +44,7 @@ public class LinksEnhancer {
 			resource.add(linkTo(EndpointHypermediaAutoConfiguration.class).slash(
 					this.rootPath + self).withSelfRel());
 		}
-		for (MvcEndpoint endpoint : getEndpoints()) {
+		for (MvcEndpoint endpoint : this.endpoints.getEndpoints()) {
 			if (endpoint.getPath().equals(self)) {
 				continue;
 			}
@@ -64,13 +59,6 @@ public class LinksEnhancer {
 						.withRel(rel));
 			}
 		}
-	}
-
-	private Set<? extends MvcEndpoint> getEndpoints() {
-		if (this.endpoints == null) {
-			this.endpoints = this.beanFactory.getBean(MvcEndpoints.class);
-		}
-		return this.endpoints.getEndpoints();
 	}
 
 }

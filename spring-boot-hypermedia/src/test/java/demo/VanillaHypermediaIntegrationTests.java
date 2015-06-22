@@ -50,9 +50,19 @@ public class VanillaHypermediaIntegrationTests {
 	}
 
 	@Test
+	public void trace() throws Exception {
+		this.mockMvc
+		.perform(get("/trace").accept(MediaType.APPLICATION_JSON))
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$._links.self.href").value("http://localhost/trace"))
+		.andExpect(jsonPath("$.trace").isArray());
+	}
+
+	@Test
 	public void envValue() throws Exception {
 		this.mockMvc.perform(get("/env/user.home").accept(MediaType.APPLICATION_JSON))
-		.andExpect(status().isOk()).andExpect(jsonPath("$._links").doesNotExist());
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$._links").doesNotExist());
 	}
 
 	@Test
@@ -73,7 +83,7 @@ public class VanillaHypermediaIntegrationTests {
 			if ("/hal".equals(path)) {
 				continue;
 			}
-			path = path.length()>0 ? path : "/";
+			path = path.length() > 0 ? path : "/";
 			this.mockMvc
 			.perform(get(path).accept(MediaType.APPLICATION_JSON))
 			.andExpect(status().isOk())
