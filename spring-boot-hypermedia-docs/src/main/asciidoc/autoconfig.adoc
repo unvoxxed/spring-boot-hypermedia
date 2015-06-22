@@ -12,7 +12,7 @@ The report is split into 2 parts, positive matches first, and then negative.
 If the context is a hierarchy, there is also a separate report on the parent
 context with the same format (and recursively up to the top of the hierarchy).
 
-NOTE: the repost is actually about `@Conditional` evaluation not autoconfiguration
+NOTE: the report is actually about `@Conditional` evaluation not autoconfiguration
 per se, but most autoconfiguration features use `@Conditional` heavily, so there is
 a lot of overlap.
 
