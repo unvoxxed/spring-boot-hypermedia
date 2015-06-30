@@ -38,6 +38,33 @@ public class ActuatorDocsEndpoint extends WebMvcConfigurerAdapter implements Mvc
 
 	private ManagementServerProperties management;
 
+
+	private Curies curies = new Curies();
+
+	public Curies getCuries() {
+		return this.curies;
+	}
+
+	/**
+	 * Properties of the default CurieProvider (used for adding docs links). If enabled, all
+	 * unqualified rels will pick up a prefix and a curie template pointing to the docs endpoint.
+	 *
+	 */
+	public static class Curies {
+		/**
+		 * Enable the curie generation (off by default).
+		 */
+		private boolean enabled = false;
+
+		public boolean isEnabled() {
+			return this.enabled;
+		}
+
+		public void setEnabled(boolean enabled) {
+			this.enabled = enabled;
+		}
+	}
+
 	public ActuatorDocsEndpoint(ManagementServerProperties management) {
 		this.management = management;
 	}
@@ -55,8 +82,8 @@ public class ActuatorDocsEndpoint extends WebMvcConfigurerAdapter implements Mvc
 	@Override
 	public void addResourceHandlers(ResourceHandlerRegistry registry) {
 		registry.addResourceHandler(this.management.getContextPath() + this.path + "/**")
-				.addResourceLocations(
-						"classpath:/META-INF/resources/spring-boot-actuator/docs/");
+		.addResourceLocations(
+				"classpath:/META-INF/resources/spring-boot-actuator/docs/");
 	}
 
 	public void setPath(String path) {

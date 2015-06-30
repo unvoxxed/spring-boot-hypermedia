@@ -36,7 +36,9 @@ import org.springframework.boot.actuate.hypermedia.endpoints.LinksEnhancer;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -44,6 +46,7 @@ import org.springframework.boot.autoconfigure.condition.SpringBootCondition;
 import org.springframework.boot.autoconfigure.hateoas.HypermediaAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.HttpMessageConverters;
 import org.springframework.boot.autoconfigure.web.ResourceProperties;
+import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
@@ -53,6 +56,9 @@ import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.hateoas.Link;
 import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.ResourceSupport;
+import org.springframework.hateoas.UriTemplate;
+import org.springframework.hateoas.hal.CurieProvider;
+import org.springframework.hateoas.hal.DefaultCurieProvider;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.HttpMessageNotWritableException;
@@ -86,6 +92,7 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 public class EndpointHypermediaAutoConfiguration {
 
 	@Bean
+	@ConditionalOnProperty(value = "endpoints.links.enabled", matchIfMissing = true)
 	public LinksMvcEndpoint linksMvcEndpoint(ResourceProperties resources) {
 		return new LinksMvcEndpoint(resources.getWelcomePage() != null ? "/links" : "");
 	}
@@ -107,10 +114,24 @@ public class EndpointHypermediaAutoConfiguration {
 		return new ActuatorDocsEndpoint(management);
 	}
 
+	@Bean
+	@ConditionalOnBean(ActuatorDocsEndpoint.class)
+	@ConditionalOnMissingBean(CurieProvider.class)
+	@ConditionalOnProperty(value = "endpoints.docs.curies.enabled", matchIfMissing = false)
+	public DefaultCurieProvider curieProvider(ServerProperties server,
+			ManagementServerProperties management, ActuatorDocsEndpoint endpoint) {
+		String path = management.getContextPath() + endpoint.getPath()
+				+ "/#spring_boot_actuator__{rel}";
+		if (server.getPort() == management.getPort() && management.getPort() != null && management.getPort() != 0) {
+			path = server.getPath(path);
+		}
+		return new DefaultCurieProvider("boot", new UriTemplate(path));
+	}
+
 	@Configuration("EndpointHypermediaAutoConfiguration.MissingResourceCondition")
 	@ConditionalOnResource(resources = "classpath:/META-INF/spring-data-rest/hal-browser/index.html")
 	protected static class MissingSpringDataRestResourceCondition extends
-			SpringBootCondition {
+	SpringBootCondition {
 		@Override
 		public ConditionOutcome getMatchOutcome(ConditionContext context,
 				AnnotatedTypeMetadata metadata) {
@@ -169,7 +190,7 @@ public class EndpointHypermediaAutoConfiguration {
 		public Object beforeBodyWrite(Object body, MethodParameter returnType,
 				MediaType selectedContentType,
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-				ServerHttpRequest request, ServerHttpResponse response) {
+						ServerHttpRequest request, ServerHttpResponse response) {
 			HttpServletRequest servletRequest = null;
 			if (request instanceof ServletServerHttpRequest) {
 				servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
@@ -202,7 +223,7 @@ public class EndpointHypermediaAutoConfiguration {
 		}
 
 		private boolean isLinksPath(String path) {
-			return (this.management.getContextPath() + linksEndpoint.getPath())
+			return (this.management.getContextPath() + this.linksEndpoint.getPath())
 					.equals(path);
 		}
 
@@ -249,7 +270,7 @@ public class EndpointHypermediaAutoConfiguration {
 		public Object beforeBodyWrite(Object body, MethodParameter returnType,
 				MediaType selectedContentType,
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-				ServerHttpRequest request, ServerHttpResponse response) {
+						ServerHttpRequest request, ServerHttpResponse response) {
 
 			if (body == null) {
 				// Assume it already was handled
@@ -294,7 +315,7 @@ public class EndpointHypermediaAutoConfiguration {
 
 		private HttpMessageConverter<?> findConverter(
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-				MediaType mediaType) {
+						MediaType mediaType) {
 			if (this.converterCache.containsKey(mediaType)) {
 				return this.converterCache.get(mediaType);
 			}
