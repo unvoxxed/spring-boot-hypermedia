@@ -1,2 +1,2 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+org.springframework.boot.actuate.autoconfigure.EndpointWebMvcConfiguration=\
 org.springframework.boot.actuate.hypermedia.autoconfigure.EndpointHypermediaAutoConfiguration

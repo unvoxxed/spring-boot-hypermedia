@@ -1,4 +1,4 @@
-package demo;
+package org.springframework.boot.actuate.hypermedia.test;
 
 import static org.springframework.restdocs.RestDocumentation.document;
 import static org.springframework.restdocs.RestDocumentation.documentationConfiguration;

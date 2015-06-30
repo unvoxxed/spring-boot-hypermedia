@@ -1,4 +1,4 @@
-package demo;
+package org.springframework.boot.actuate.hypermedia.test;
 
 import static org.springframework.restdocs.RestDocumentation.document;
 import static org.springframework.restdocs.RestDocumentation.documentationConfiguration;
@@ -28,7 +28,7 @@ import org.springframework.web.context.WebApplicationContext;
 @TestPropertySource(properties = { "spring.jackson.serialization.indent_output=true",
 "endpoints.health.sensitive=false" })
 @DirtiesContext
-public class HealthEndpointDocumentation {
+public class HypermediaEndpointDocumentation {
 
 	@Autowired
 	private WebApplicationContext context;
@@ -54,10 +54,24 @@ public class HealthEndpointDocumentation {
 	}
 
 	@Test
-	public void health() throws Exception {
-		this.mockMvc.perform(get("/health").accept(MediaType.APPLICATION_JSON))
+	public void beans() throws Exception {
+		this.mockMvc.perform(get("/beans").accept(MediaType.APPLICATION_JSON))
 		.andExpect(status().isOk())
-		.andDo(document("health/unsensitive"));
+		.andDo(document("beans/hypermedia"));
+	}
+
+	@Test
+	public void metrics() throws Exception {
+		this.mockMvc.perform(get("/metrics").accept(MediaType.APPLICATION_JSON))
+		.andExpect(status().isOk())
+		.andDo(document("metrics/hypermedia"));
+	}
+
+	@Test
+	public void home() throws Exception {
+		this.mockMvc.perform(get("/").accept(MediaType.APPLICATION_JSON))
+		.andExpect(status().isOk())
+		.andDo(document("admin"));
 	}
 
 }

@@ -20,6 +20,7 @@ import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties
 import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
@@ -31,23 +32,26 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter
 @ConfigurationProperties("endpoints.hal")
 public class HalBrowserEndpoint extends WebMvcConfigurerAdapter implements MvcEndpoint {
 
-	private String path = "/hal";
+	private static final String HAL_BROWSER_VERSION = "b7669f1-1";
+
+	private String path = "";
 
 	private ManagementServerProperties management;
 
 	private boolean sensitive;
 
-	public HalBrowserEndpoint(ManagementServerProperties management) {
+	public HalBrowserEndpoint(ManagementServerProperties management, String defaultPath) {
 		this.management = management;
+		path = defaultPath;
 	}
 
-	@RequestMapping("/")
+	@RequestMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
 	public String browse() {
 		return "forward:" + this.management.getContextPath() + this.path
 				+ "/browser.html";
 	}
 
-	@RequestMapping("")
+	@RequestMapping(value = "", produces = MediaType.TEXT_HTML_VALUE)
 	public String redirect() {
 		return "redirect:" + this.management.getContextPath() + this.path + "/#"
 				+ this.management.getContextPath();
@@ -55,9 +59,16 @@ public class HalBrowserEndpoint extends WebMvcConfigurerAdapter implements MvcEn
 
 	@Override
 	public void addResourceHandlers(ResourceHandlerRegistry registry) {
+		// Make sure the root path is not cached otherwise the browser won't come back for
+		// the JSON
+		registry.addResourceHandler(this.management.getContextPath() + this.path + "/")
+				.addResourceLocations(
+						"classpath:/META-INF/resources/webjars/hal-browser/"
+								+ HAL_BROWSER_VERSION + "/").setCachePeriod(0);
 		registry.addResourceHandler(this.management.getContextPath() + this.path + "/**")
-		.addResourceLocations(
-				"classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1/");
+				.addResourceLocations(
+						"classpath:/META-INF/resources/webjars/hal-browser/"
+								+ HAL_BROWSER_VERSION + "/");
 	}
 
 	public void setPath(String path) {

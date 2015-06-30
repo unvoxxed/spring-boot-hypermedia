@@ -18,6 +18,7 @@ package org.springframework.boot.actuate.hypermedia.autoconfigure;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
@@ -35,19 +35,27 @@ import org.springframework.boot.actuate.hypermedia.endpoints.HalBrowserEndpoint;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksEnhancer;
 import org.springframework.boot.actuate.hypermedia.endpoints.LinksMvcEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionOutcome;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnResource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.autoconfigure.condition.SpringBootCondition;
 import org.springframework.boot.autoconfigure.hateoas.HypermediaAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.HttpMessageConverters;
+import org.springframework.boot.autoconfigure.web.ResourceProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ConditionContext;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.hateoas.Link;
+import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
@@ -78,23 +86,40 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlRootElement;
 public class EndpointHypermediaAutoConfiguration {
 
 	@Bean
-	public LinksMvcEndpoint linksMvcEndpoint(BeanFactory beanFactory,
-			ManagementServerProperties management) {
-		return new LinksMvcEndpoint();
+	public LinksMvcEndpoint linksMvcEndpoint(ResourceProperties resources) {
+		return new LinksMvcEndpoint(resources.getWelcomePage() != null ? "/links" : "");
 	}
 
 	@Bean
 	@ConditionalOnProperty(value = "endpoints.hal.enabled", matchIfMissing = true)
 	@ConditionalOnResource(resources = "classpath:/META-INF/resources/webjars/hal-browser/b7669f1-1")
-	public HalBrowserEndpoint halBrowserMvcEndpoint(ManagementServerProperties management) {
-		return new HalBrowserEndpoint(management);
+	@Conditional(MissingSpringDataRestResourceCondition.class)
+	public HalBrowserEndpoint halBrowserMvcEndpoint(
+			ManagementServerProperties management, ResourceProperties resources) {
+		return new HalBrowserEndpoint(management,
+				resources.getWelcomePage() != null ? "/hal" : "");
 	}
 
 	@Bean
 	@ConditionalOnProperty(value = "endpoints.docs.enabled", matchIfMissing = true)
-	@ConditionalOnResource(resources = "classpath:/static/docs/index.html")
+	@ConditionalOnResource(resources = "classpath:/META-INF/resources/spring-boot-actuator/docs/index.html")
 	public ActuatorDocsEndpoint actuatorDocsEndpoint(ManagementServerProperties management) {
 		return new ActuatorDocsEndpoint(management);
+	}
+
+	@Configuration("EndpointHypermediaAutoConfiguration.MissingResourceCondition")
+	@ConditionalOnResource(resources = "classpath:/META-INF/spring-data-rest/hal-browser/index.html")
+	protected static class MissingSpringDataRestResourceCondition extends
+			SpringBootCondition {
+		@Override
+		public ConditionOutcome getMatchOutcome(ConditionContext context,
+				AnnotatedTypeMetadata metadata) {
+			if (context.getRegistry().containsBeanDefinition(
+					"EndpointHypermediaAutoConfiguration.MissingResourceCondition")) {
+				return ConditionOutcome.noMatch("Spring Data REST HAL browser found");
+			}
+			return ConditionOutcome.match("Spring Data REST HAL browser not found");
+		}
 	}
 
 	/**
@@ -110,6 +135,9 @@ public class EndpointHypermediaAutoConfiguration {
 
 		@Autowired
 		MvcEndpoints endpoints;
+
+		@Autowired
+		LinksMvcEndpoint linksEndpoint;
 
 		@Autowired
 		ManagementServerProperties management;
@@ -141,7 +169,7 @@ public class EndpointHypermediaAutoConfiguration {
 		public Object beforeBodyWrite(Object body, MethodParameter returnType,
 				MediaType selectedContentType,
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-						ServerHttpRequest request, ServerHttpResponse response) {
+				ServerHttpRequest request, ServerHttpResponse response) {
 			HttpServletRequest servletRequest = null;
 			if (request instanceof ServletServerHttpRequest) {
 				servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
@@ -149,7 +177,7 @@ public class EndpointHypermediaAutoConfiguration {
 						.getAttribute(HandlerMapping.PATH_WITHIN_HANDLER_MAPPING_ATTRIBUTE);
 				if (pattern != null) {
 					String path = pattern.toString();
-					if (isHomePage(path) || isManagementPath(path)) {
+					if (isHomePage(path) || isManagementPath(path) || isLinksPath(path)) {
 						ResourceSupport resource = (ResourceSupport) body;
 						if (isHomePage(path) && hasManagementPath()) {
 							String rel = this.management.getContextPath().substring(1);
@@ -171,6 +199,11 @@ public class EndpointHypermediaAutoConfiguration {
 
 		private boolean isManagementPath(String path) {
 			return this.management.getContextPath().equals(path);
+		}
+
+		private boolean isLinksPath(String path) {
+			return (this.management.getContextPath() + linksEndpoint.getPath())
+					.equals(path);
 		}
 
 		private boolean isHomePage(String path) {
@@ -216,12 +249,22 @@ public class EndpointHypermediaAutoConfiguration {
 		public Object beforeBodyWrite(Object body, MethodParameter returnType,
 				MediaType selectedContentType,
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-						ServerHttpRequest request, ServerHttpResponse response) {
+				ServerHttpRequest request, ServerHttpResponse response) {
 
-			HttpMessageConverter<?> converter = findConverter(selectedConverterType,
-					selectedContentType);
-			if (converter == null
-					|| !converter.canWrite(ResourceSupport.class, selectedContentType)) {
+			if (body == null) {
+				// Assume it already was handled
+				return body;
+			}
+
+			if (body instanceof Resource) {
+				// Assume it already has its links
+				return body;
+			}
+
+			@SuppressWarnings("unchecked")
+			HttpMessageConverter<Object> converter = (HttpMessageConverter<Object>) findConverter(
+					selectedConverterType, selectedContentType);
+			if (converter == null) {
 				// Not a resource that can be enhanced with a link
 				return body;
 			}
@@ -234,7 +277,14 @@ public class EndpointHypermediaAutoConfiguration {
 				if (path == null) {
 					path = "";
 				}
-				return new EndpointResource(body, path);
+				try {
+					converter.write(new EndpointResource(body, path),
+							selectedContentType, response);
+				}
+				catch (IOException e) {
+					throw new HttpMessageNotWritableException("Cannot write response", e);
+				}
+				return null;
 			}
 			else {
 				return body;
@@ -244,7 +294,7 @@ public class EndpointHypermediaAutoConfiguration {
 
 		private HttpMessageConverter<?> findConverter(
 				Class<? extends HttpMessageConverter<?>> selectedConverterType,
-						MediaType mediaType) {
+				MediaType mediaType) {
 			if (this.converterCache.containsKey(mediaType)) {
 				return this.converterCache.get(mediaType);
 			}
@@ -261,7 +311,7 @@ public class EndpointHypermediaAutoConfiguration {
 	}
 
 	@JsonInclude(content = Include.NON_NULL)
-	@JacksonXmlRootElement(localName="resource")
+	@JacksonXmlRootElement(localName = "resource")
 	private static class EndpointResource extends ResourceSupport {
 
 		private Object content;

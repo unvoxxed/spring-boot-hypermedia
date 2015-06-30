@@ -20,6 +20,7 @@ import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.hateoas.ResourceSupport;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -32,7 +33,11 @@ public class LinksMvcEndpoint implements MvcEndpoint {
 
 	private String path = "";
 
-	@RequestMapping(value = { "/", "" })
+	public LinksMvcEndpoint(String defaultPath) {
+		path = defaultPath;
+	}
+
+	@RequestMapping(value = { "/", "" }, produces=MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public ResourceSupport links() {
 		ResourceSupport resource = new ResourceSupport();

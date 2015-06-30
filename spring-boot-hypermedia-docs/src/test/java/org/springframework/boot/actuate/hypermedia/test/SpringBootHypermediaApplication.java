@@ -1,4 +1,4 @@
-package demo;
+package org.springframework.boot.actuate.hypermedia.test;
 
 import groovy.text.GStringTemplateEngine;
 import groovy.text.TemplateEngine;

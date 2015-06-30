@@ -20,6 +20,7 @@ import org.springframework.boot.actuate.autoconfigure.ManagementServerProperties
 import org.springframework.boot.actuate.endpoint.Endpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
@@ -41,21 +42,21 @@ public class ActuatorDocsEndpoint extends WebMvcConfigurerAdapter implements Mvc
 		this.management = management;
 	}
 
-	@RequestMapping("/")
+	@RequestMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
 	public String browse() {
-		return "forward:" + this.path + "/index.html";
+		return "forward:" + this.management.getContextPath() + this.path + "/index.html";
 	}
 
-	@RequestMapping("")
+	@RequestMapping(value = "", produces = MediaType.TEXT_HTML_VALUE)
 	public String redirect() {
 		return "redirect:" + this.management.getContextPath() + this.path + "/";
 	}
 
 	@Override
 	public void addResourceHandlers(ResourceHandlerRegistry registry) {
-		registry.addResourceHandler(this.management.getContextPath() + this.path + "/images/**")
-		.addResourceLocations(
-				"classpath:/static/docs/images/");
+		registry.addResourceHandler(this.management.getContextPath() + this.path + "/**")
+				.addResourceLocations(
+						"classpath:/META-INF/resources/spring-boot-actuator/docs/");
 	}
 
 	public void setPath(String path) {
