@@ -14,7 +14,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.boot.actuate.hypermedia.test.VanillaHypermediaIntegrationTests.SpringBootHypermediaApplication;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.SpringApplicationConfiguration;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
@@ -48,8 +47,8 @@ public class VanillaHypermediaIntegrationTests {
 	@Test
 	public void links() throws Exception {
 		this.mockMvc.perform(get("/").accept(MediaType.APPLICATION_JSON))
-				.andExpect(status().isOk()).andExpect(jsonPath("$._links").exists())
-				.andExpect(header().doesNotExist("cache-control"));
+		.andExpect(status().isOk()).andExpect(jsonPath("$._links").exists())
+		.andExpect(header().doesNotExist("cache-control"));
 	}
 
 	@Test
@@ -62,17 +61,17 @@ public class VanillaHypermediaIntegrationTests {
 	@Test
 	public void trace() throws Exception {
 		this.mockMvc
-				.perform(get("/trace").accept(MediaType.APPLICATION_JSON))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$._links.self.href").value("http://localhost/trace"))
-				.andExpect(jsonPath("$.content").isArray());
+		.perform(get("/trace").accept(MediaType.APPLICATION_JSON))
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$._links.self.href").value("http://localhost/trace"))
+		.andExpect(jsonPath("$.content").isArray());
 	}
 
 	@Test
 	public void envValue() throws Exception {
 		this.mockMvc.perform(get("/env/user.home").accept(MediaType.APPLICATION_JSON))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$._links").doesNotExist());
+		.andExpect(status().isOk())
+		.andExpect(jsonPath("$._links").doesNotExist());
 	}
 
 	@Test
@@ -81,8 +80,8 @@ public class VanillaHypermediaIntegrationTests {
 			String path = endpoint.getPath();
 			path = path.startsWith("/") ? path.substring(1) : path;
 			this.mockMvc.perform(get("/").accept(MediaType.APPLICATION_JSON))
-					.andExpect(status().isOk())
-					.andExpect(jsonPath("$._links.%s.href", path).exists());
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$._links.%s.href", path).exists());
 		}
 	}
 
@@ -96,15 +95,15 @@ public class VanillaHypermediaIntegrationTests {
 			}
 			path = path.length() > 0 ? path : "/";
 			this.mockMvc
-					.perform(get(path).accept(MediaType.APPLICATION_JSON))
-					.andExpect(status().isOk())
-					.andExpect(
-							jsonPath("$._links.self.href").value(
-									"http://localhost" + endpoint.getPath()));
+			.perform(get(path).accept(MediaType.APPLICATION_JSON))
+			.andExpect(status().isOk())
+			.andExpect(
+					jsonPath("$._links.self.href").value(
+							"http://localhost" + endpoint.getPath()));
 		}
 	}
 
-	@EnableAutoConfiguration
+	@MinimalActuatorHypermediaApplication
 	@Configuration
 	public static class SpringBootHypermediaApplication {
 

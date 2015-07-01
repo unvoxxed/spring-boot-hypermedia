@@ -10,12 +10,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.hypermedia.test.ServerPortHypermediaIntegrationTests.SpringBootHypermediaApplication;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.IntegrationTest;
 import org.springframework.boot.test.SpringApplicationConfiguration;
 import org.springframework.boot.test.TestRestTemplate;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -59,12 +57,10 @@ public class ServerPortHypermediaIntegrationTests {
 				"http://localhost:" + this.port + "/", HttpMethod.GET,
 				new HttpEntity<Void>(null, headers), String.class);
 		assertEquals(HttpStatus.OK, entity.getStatusCode());
-		assertTrue("Wrong body: " + entity.getBody(),
-				entity.getBody().contains("<title"));
+		assertTrue("Wrong body: " + entity.getBody(), entity.getBody().contains("<title"));
 	}
 
-	@Configuration
-	@EnableAutoConfiguration
+	@MinimalActuatorHypermediaApplication
 	@RestController
 	public static class SpringBootHypermediaApplication {
 

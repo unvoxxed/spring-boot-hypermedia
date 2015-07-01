@@ -2,7 +2,8 @@ package org.springframework.boot.actuate.hypermedia.test;
 
 import static org.junit.Assert.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.boot.actuate.hypermedia.test.BrowserPathHypermediaIntegrationTests.SpringBootHypermediaApplication;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.SpringApplicationConfiguration;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
@@ -55,11 +55,11 @@ public class BrowserPathHypermediaIntegrationTests {
 	@Test
 	public void redirect() throws Exception {
 		this.mockMvc.perform(get("/hal").accept(MediaType.TEXT_HTML))
-				.andExpect(status().isFound())
-				.andExpect(header().string("location", "/hal/#"));
+		.andExpect(status().isFound())
+		.andExpect(header().string("location", "/hal/#"));
 	}
 
-	@EnableAutoConfiguration
+	@MinimalActuatorHypermediaApplication
 	@Configuration
 	public static class SpringBootHypermediaApplication {
 

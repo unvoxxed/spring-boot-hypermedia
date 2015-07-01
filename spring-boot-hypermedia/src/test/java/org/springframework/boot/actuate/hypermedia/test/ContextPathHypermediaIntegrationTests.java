@@ -12,10 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
 import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoints;
 import org.springframework.boot.actuate.hypermedia.test.ContextPathHypermediaIntegrationTests.SpringBootHypermediaApplication;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.SpringApplicationConfiguration;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
@@ -86,8 +84,7 @@ public class ContextPathHypermediaIntegrationTests {
 		}
 	}
 
-	@Configuration
-	@EnableAutoConfiguration
+	@MinimalActuatorHypermediaApplication
 	@RestController
 	public static class SpringBootHypermediaApplication {
 

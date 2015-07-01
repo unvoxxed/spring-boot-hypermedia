@@ -10,12 +10,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.actuate.hypermedia.test.ServerContextPathHypermediaIntegrationTests.SpringBootHypermediaApplication;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.IntegrationTest;
 import org.springframework.boot.test.SpringApplicationConfiguration;
 import org.springframework.boot.test.TestRestTemplate;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.hateoas.ResourceSupport;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -63,8 +61,7 @@ public class ServerContextPathHypermediaIntegrationTests {
 				entity.getBody().contains("<title"));
 	}
 
-	@Configuration
-	@EnableAutoConfiguration
+	@MinimalActuatorHypermediaApplication
 	@RestController
 	public static class SpringBootHypermediaApplication {
 
@@ -78,7 +75,7 @@ public class ServerContextPathHypermediaIntegrationTests {
 
 		public static void main(String[] args) {
 			new SpringApplicationBuilder(SpringBootHypermediaApplication.class)
-			.properties("management.port:9000").run(args);
+			.properties("server.contextPath=/spring").run(args);
 		}
 	}
 
